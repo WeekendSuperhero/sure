@@ -19,6 +19,22 @@
 
   <div class="flex items-center justify-between">
     <div class="space-y-1">
+      <p class="text-sm"><%= t(".prefer_data_fidelity_label") %></p>
+      <p class="text-secondary text-sm"><%= t(".prefer_data_fidelity_description") %></p>
+    </div>
+
+    <%= styled_form_with model: Setting.new,
+                         url: settings_hosting_path,
+                         method: :patch,
+                         data: { controller: "auto-submit-form", auto_submit_form_trigger_event_value: "change" } do |form| %>
+      <%= form.toggle :syncs_prefer_data_fidelity,
+                      checked: Setting.syncs_prefer_data_fidelity,
+                      data: { auto_submit_form_target: "auto" } %>
+    <% end %>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <div class="space-y-1">
       <p class="text-sm"><%= t(".auto_sync_label") %></p>
       <p class="text-secondary text-sm"><%= t(".auto_sync_description") %></p>
     </div>

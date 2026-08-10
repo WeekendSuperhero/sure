@@ -17,12 +17,7 @@ class PlaidEntry::Processor
       category_id: matched_category&.id,
       merchant: merchant,
       pending_transaction_id: pending_transaction_id, # Plaid's linking ID for pending→posted
-      extra: {
-        plaid: {
-          pending: plaid_transaction["pending"],
-          pending_transaction_id: pending_transaction_id # Also store for reference
-        }
-      }
+      extra: plaid_extra
     )
   end
 
@@ -41,8 +36,75 @@ class PlaidEntry::Processor
       plaid_transaction["transaction_id"]
     end
 
+    # Prefer bank-fidelity naming when enabled (default): original description first.
+    # When disabled, prefer Plaid's cleaned merchant name (legacy behavior).
     def name
-      plaid_transaction["merchant_name"] || plaid_transaction["original_description"]
+      merchant = merchant_name.presence
+      original = original_description.presence
+
+      if prefer_data_fidelity?
+        original || merchant
+      else
+        merchant || original
+      end
+    end
+
+    def prefer_data_fidelity?
+      Setting.syncs_prefer_data_fidelity
+    end
+
+    def merchant_name
+      plaid_transaction["merchant_name"]
+    end
+
+    def original_description
+      plaid_transaction["original_description"]
+    end
+
+    def plaid_extra
+      plaid = {
+        "pending" => plaid_transaction["pending"],
+        "pending_transaction_id" => pending_transaction_id
+      }
+
+      plaid["original_description"] = original_description if original_description.present?
+      plaid["payment_channel"] = plaid_transaction["payment_channel"] if plaid_transaction["payment_channel"].present?
+      plaid["transaction_code"] = plaid_transaction["transaction_code"] if plaid_transaction["transaction_code"].present?
+
+      payment_meta = compact_provider_hash(plaid_transaction["payment_meta"])
+      plaid["payment_meta"] = payment_meta if payment_meta.present?
+
+      counterparties = compact_counterparties(plaid_transaction["counterparties"])
+      plaid["counterparties"] = counterparties if counterparties.present?
+
+      { "plaid" => plaid }
+    end
+
+    def compact_provider_hash(value)
+      return nil unless value.is_a?(Hash)
+
+      compacted = {}
+      value.each do |key, raw|
+        next if raw.nil? || raw == ""
+
+        if raw.is_a?(Hash)
+          nested = compact_provider_hash(raw)
+          compacted[key.to_s] = nested if nested.present?
+        else
+          compacted[key.to_s] = raw
+        end
+      end
+      compacted.presence
+    end
+
+    def compact_counterparties(value)
+      return nil unless value.is_a?(Array)
+
+      value.filter_map do |counterparty|
+        next unless counterparty.is_a?(Hash)
+
+        compact_provider_hash(counterparty)
+      end.presence
     end
 
     def amount

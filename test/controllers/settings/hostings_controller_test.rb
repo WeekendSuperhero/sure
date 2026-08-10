@@ -30,6 +30,7 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     %i[anthropic_access_token anthropic_base_url anthropic_model llm_provider twelve_data_api_key openai_access_token external_assistant_token rentcast_api_key realie_api_key].each do |key|
       Setting.public_send("#{key}=", nil)
     end
+    Setting.syncs_prefer_data_fidelity = true
   end
 
   test "cannot edit when self hosting is disabled" do
@@ -678,5 +679,36 @@ class Settings::HostingsControllerTest < ActionDispatch::IntegrationTest
     end
   ensure
     Setting.securities_providers = ""
+  end
+
+  test "toggling prefer data fidelity clears plaid cursors and re-syncs items" do
+    with_self_hosting do
+      plaid_item = plaid_items(:one)
+      plaid_item.update!(next_cursor: "cursor-before-fidelity-change")
+      Setting.syncs_prefer_data_fidelity = true
+
+      assert_enqueued_with(job: SyncJob) do
+        patch settings_hosting_url, params: { setting: { syncs_prefer_data_fidelity: "0" } }
+      end
+
+      assert_response :redirect
+      refute Setting.syncs_prefer_data_fidelity
+      assert_nil plaid_item.reload.next_cursor
+    end
+  end
+
+  test "saving the same data fidelity value does not force a plaid re-sync" do
+    with_self_hosting do
+      plaid_item = plaid_items(:one)
+      plaid_item.update!(next_cursor: "cursor-unchanged")
+      Setting.syncs_prefer_data_fidelity = true
+
+      assert_no_enqueued_jobs(only: SyncJob) do
+        patch settings_hosting_url, params: { setting: { syncs_prefer_data_fidelity: "1" } }
+      end
+
+      assert Setting.syncs_prefer_data_fidelity
+      assert_equal "cursor-unchanged", plaid_item.reload.next_cursor
+    end
   end
 end
