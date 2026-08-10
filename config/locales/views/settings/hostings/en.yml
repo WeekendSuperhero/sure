@@ -256,4 +256,6 @@ en:
         auto_sync_time_description: Specify the time of day when automatic sync should occur.
         include_pending_label: Include pending transactions
         include_pending_description: When enabled, pending (uncleared) transactions will be imported and automatically reconciled when they post. Disable if your bank provides unreliable pending data.
+        prefer_data_fidelity_label: Prefer higher data fidelity
+        prefer_data_fidelity_description: When enabled, Plaid transaction names use the bank's original description (with merchant name as fallback) and store extra payment metadata. When changed, Plaid connections re-sync their full transaction history to apply the update. Disable to prefer cleaner merchant names.
         env_configured_message: This setting is disabled because a provider environment variable (SIMPLEFIN_INCLUDE_PENDING or PLAID_INCLUDE_PENDING) is set. Remove it to enable this setting.

@@ -129,6 +129,17 @@ class Settings::HostingsController < ApplicationController
       Setting.syncs_include_pending = hosting_params[:syncs_include_pending] == "1"
     end
 
+    if hosting_params.key?(:syncs_prefer_data_fidelity)
+      previous_fidelity = Setting.syncs_prefer_data_fidelity
+      Setting.syncs_prefer_data_fidelity = hosting_params[:syncs_prefer_data_fidelity] == "1"
+
+      # Changing name/metadata preference requires a full transactions/sync replay
+      # (null cursor) so existing Plaid entries can be upserted with new names + extras.
+      if previous_fidelity != Setting.syncs_prefer_data_fidelity
+        resync_plaid_items_for_data_fidelity_change!
+      end
+    end
+
     sync_settings_changed = false
 
     if hosting_params.key?(:auto_sync_enabled)
@@ -272,7 +283,17 @@ class Settings::HostingsController < ApplicationController
   private
     def hosting_params
       return ActionController::Parameters.new unless params.key?(:setting)
-      params.require(:setting).permit(:onboarding_state, :require_email_confirmation, :invite_only_default_family_id, :brand_fetch_client_id, :brand_fetch_high_res_logos, :twelve_data_api_key, :tiingo_api_key, :eodhd_api_key, :alpha_vantage_api_key, :tinkoff_invest_api_key, :rentcast_api_key, :realie_api_key, :openai_access_token, :openai_uri_base, :openai_model, :openai_json_mode, :anthropic_access_token, :anthropic_base_url, :anthropic_model, :llm_provider, :llm_context_window, :llm_max_response_tokens, :llm_max_items_per_call, :ai_response_timeout, :exchange_rate_provider, :securities_provider, :syncs_include_pending, :auto_sync_enabled, :auto_sync_time, :external_assistant_url, :external_assistant_token, :external_assistant_agent_id, securities_providers: [])
+
+      params.require(:setting).permit(:onboarding_state, :require_email_confirmation, :invite_only_default_family_id, :brand_fetch_client_id, :brand_fetch_high_res_logos, :twelve_data_api_key, :tiingo_api_key, :eodhd_api_key, :alpha_vantage_api_key, :tinkoff_invest_api_key, :rentcast_api_key, :realie_api_key, :openai_access_token, :openai_uri_base, :openai_model, :openai_json_mode, :anthropic_access_token, :anthropic_base_url, :anthropic_model, :llm_provider, :llm_context_window, :llm_max_response_tokens, :llm_max_items_per_call, :ai_response_timeout, :exchange_rate_provider, :securities_provider, :syncs_include_pending, :syncs_prefer_data_fidelity, :auto_sync_enabled, :auto_sync_time, :external_assistant_url, :external_assistant_token, :external_assistant_agent_id, securities_providers: [])
+
+
+    # Clear transactions/sync cursors and enqueue a full historical re-pull for every
+    # active Plaid item so entry names and extra metadata reflect the new preference.
+    def resync_plaid_items_for_data_fidelity_change!
+      PlaidItem.syncable.find_each do |plaid_item|
+        plaid_item.update!(next_cursor: nil)
+        plaid_item.sync_later
+      end
     end
 
     def update_assistant_type

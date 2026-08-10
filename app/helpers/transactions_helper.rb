@@ -29,8 +29,9 @@ module TransactionsHelper
   # Input can be a Transaction or an Entry (responds_to :transaction).
   # Structure:
   #   {
-  #     kind: :simplefin | :raw,
+  #     kind: :simplefin | :plaid | :raw,
   #     simplefin: { payee:, description:, memo: },
+  #     plaid: { original_description:, payment_channel:, transaction_code: },
   #     provider_extras: [ { key:, value:, title: } ],
   #     raw: String (pretty JSON or string)
   #   }
@@ -51,18 +52,47 @@ module TransactionsHelper
       extras = []
       if sf.is_a?(Hash) && sf["extra"].is_a?(Hash) && sf["extra"].present?
         sf["extra"].each do |k, v|
-          display = (v.is_a?(Hash) || v.is_a?(Array)) ? v.to_json : v
-          extras << {
-            key: k.to_s.humanize,
-            value: display,
-            title: (v.is_a?(String) ? v : display.to_s)
-          }
+          extras << provider_extra_row(k, v)
         end
       end
 
       {
         kind: :simplefin,
         simplefin: simple,
+        plaid: {},
+        provider_extras: extras,
+        raw: nil
+      }
+    elsif extra.is_a?(Hash) && extra["plaid"].present?
+      plaid = extra["plaid"]
+      simple = {
+        original_description: plaid.is_a?(Hash) ? plaid["original_description"].presence : nil,
+        payment_channel: plaid.is_a?(Hash) ? plaid["payment_channel"].presence : nil,
+        transaction_code: plaid.is_a?(Hash) ? plaid["transaction_code"].presence : nil
+      }.compact
+
+      extras = []
+      if plaid.is_a?(Hash)
+        if plaid["payment_meta"].is_a?(Hash) && plaid["payment_meta"].present?
+          plaid["payment_meta"].each do |k, v|
+            extras << provider_extra_row("payment_meta.#{k}", v)
+          end
+        end
+
+        if plaid["counterparties"].is_a?(Array) && plaid["counterparties"].present?
+          plaid["counterparties"].each_with_index do |counterparty, index|
+            extras << provider_extra_row("counterparty_#{index + 1}", counterparty)
+          end
+        end
+      end
+
+      # Only show Additional details when there is something beyond pending flags
+      return nil if simple.blank? && extras.blank?
+
+      {
+        kind: :plaid,
+        simplefin: {},
+        plaid: simple,
         provider_extras: extras,
         raw: nil
       }
@@ -75,9 +105,19 @@ module TransactionsHelper
       {
         kind: :raw,
         simplefin: {},
+        plaid: {},
         provider_extras: [],
         raw: pretty
       }
     end
+  end
+
+  def provider_extra_row(key, value)
+    display = (value.is_a?(Hash) || value.is_a?(Array)) ? value.to_json : value
+    {
+      key: key.to_s.humanize,
+      value: display,
+      title: (value.is_a?(String) ? value : display.to_s)
+    }
   end
 end

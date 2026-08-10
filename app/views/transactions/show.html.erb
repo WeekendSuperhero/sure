@@ -177,6 +177,43 @@
                 </dl>
               </div>
             <% end %>
+          <% elsif details[:kind] == :plaid %>
+            <% plaid = details[:plaid] %>
+            <% if plaid.present? %>
+              <dl class="space-y-2">
+                <% if plaid[:original_description].present? %>
+                  <div class="flex items-center justify-between gap-2">
+                    <dt class="text-secondary text-sm"><%= t(".original_description") %></dt>
+                    <dd class="text-sm text-primary text-right"><%= plaid[:original_description] %></dd>
+                  </div>
+                <% end %>
+                <% if plaid[:payment_channel].present? %>
+                  <div class="flex items-center justify-between gap-2">
+                    <dt class="text-secondary text-sm"><%= t(".payment_channel") %></dt>
+                    <dd class="text-sm text-primary"><%= plaid[:payment_channel] %></dd>
+                  </div>
+                <% end %>
+                <% if plaid[:transaction_code].present? %>
+                  <div class="flex items-center justify-between gap-2">
+                    <dt class="text-secondary text-sm"><%= t(".transaction_code") %></dt>
+                    <dd class="text-sm text-primary"><%= plaid[:transaction_code] %></dd>
+                  </div>
+                <% end %>
+              </dl>
+            <% end %>
+            <% if details[:provider_extras].present? %>
+              <div class="pt-2">
+                <h4 class="text-sm text-secondary mb-1"><%= t(".provider_extras") %></h4>
+                <dl class="space-y-2">
+                  <% details[:provider_extras].each do |ex| %>
+                    <div class="flex items-center justify-between gap-2">
+                      <dt class="text-secondary text-sm"><%= ex[:key] %></dt>
+                      <dd class="text-sm text-primary truncate max-w-[60%]" title="<%= ex[:title] %>"><%= ex[:value] %></dd>
+                    </div>
+                  <% end %>
+                </dl>
+              </div>
+            <% end %>
           <% else %>
             <pre class="text-xs text-secondary bg-surface-inset rounded p-2 overflow-auto"><%= details[:raw] %></pre>
           <% end %>

@@ -153,6 +153,8 @@ class Setting < RailsSettings::Base
     simplefin && plaid
   end
   field :syncs_include_pending, type: :boolean, default: SYNCS_INCLUDE_PENDING_DEFAULT
+  # When true (default), Plaid entry names prefer original bank description over merchant_name.
+  field :syncs_prefer_data_fidelity, type: :boolean, default: true
   field :auto_sync_enabled, type: :boolean, default: ENV.fetch("AUTO_SYNC_ENABLED", "1") == "1"
   field :auto_sync_time, type: :string, default: ENV.fetch("AUTO_SYNC_TIME", "02:22")
   field :auto_sync_timezone, type: :string, default: ENV.fetch("AUTO_SYNC_TIMEZONE", "UTC")
