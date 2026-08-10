@@ -105,6 +105,7 @@ en:
       payment_channel: "Payment channel"
       transaction_code: "Transaction code"
       provider_extras: "Provider extras"
+      raw_payload: "Raw payload"
       transfer_or_debt_payment: "Transfer or Debt Payment?"
       open_matcher: "Open matcher"
       convert: "Convert"

@@ -32,7 +32,7 @@ module TransactionsHelper
   #     kind: :simplefin | :plaid | :raw,
   #     simplefin: { payee:, description:, memo: },
   #     plaid: { original_description:, payment_channel:, transaction_code: },
-  #     provider_extras: [ { key:, value:, title: } ],
+  #     provider_extras: [ { key:, value:, multiline: } ],
   #     raw: String (pretty JSON or string)
   #   }
   def build_transaction_extra_details(obj)
@@ -52,7 +52,7 @@ module TransactionsHelper
       extras = []
       if sf.is_a?(Hash) && sf["extra"].is_a?(Hash) && sf["extra"].present?
         sf["extra"].each do |k, v|
-          extras << provider_extra_row(k, v)
+          extras.concat(provider_extra_rows(k, v))
         end
       end
 
@@ -75,13 +75,13 @@ module TransactionsHelper
       if plaid.is_a?(Hash)
         if plaid["payment_meta"].is_a?(Hash) && plaid["payment_meta"].present?
           plaid["payment_meta"].each do |k, v|
-            extras << provider_extra_row("payment_meta.#{k}", v)
+            extras.concat(provider_extra_rows("Payment meta · #{k}", v))
           end
         end
 
         if plaid["counterparties"].is_a?(Array) && plaid["counterparties"].present?
           plaid["counterparties"].each_with_index do |counterparty, index|
-            extras << provider_extra_row("counterparty_#{index + 1}", counterparty)
+            extras.concat(provider_extra_rows("Counterparty #{index + 1}", counterparty))
           end
         end
       end
@@ -94,30 +94,67 @@ module TransactionsHelper
         simplefin: {},
         plaid: simple,
         provider_extras: extras,
-        raw: nil
+        # Full provider payload so nothing is hidden behind truncated one-line JSON
+        raw: pretty_json(plaid)
       }
     else
-      pretty = begin
-        JSON.pretty_generate(extra)
-      rescue StandardError
-        extra.to_s
-      end
       {
         kind: :raw,
         simplefin: {},
         plaid: {},
         provider_extras: [],
-        raw: pretty
+        raw: pretty_json(extra)
       }
     end
   end
 
-  def provider_extra_row(key, value)
-    display = (value.is_a?(Hash) || value.is_a?(Array)) ? value.to_json : value
+  # Flatten hashes into labeled rows; pretty-print remaining nested structures.
+  def provider_extra_rows(key, value, depth: 0)
+    label = key.to_s
+
+    case value
+    when Hash
+      value.flat_map do |child_key, child_value|
+        next [] if child_value.nil? || child_value == ""
+
+        child_label = if depth.zero? && label.match?(/\ACounterparty \d+\z/i)
+          "#{label} · #{child_key}"
+        elsif depth.zero?
+          "#{label} · #{child_key}"
+        else
+          "#{label}.#{child_key}"
+        end
+        provider_extra_rows(child_label, child_value, depth: depth + 1)
+      end
+    when Array
+      if value.all? { |item| !item.is_a?(Hash) && !item.is_a?(Array) }
+        [ provider_extra_row(label, value.join(", ")) ]
+      else
+        [ provider_extra_row(label, pretty_json(value), multiline: true) ]
+      end
+    else
+      [ provider_extra_row(label, value) ]
+    end
+  end
+
+  def provider_extra_row(key, value, multiline: false)
+    display = if multiline || value.is_a?(Hash) || value.is_a?(Array)
+      pretty_json(value)
+    else
+      value
+    end
+
     {
       key: key.to_s.humanize,
       value: display,
-      title: (value.is_a?(String) ? value : display.to_s)
+      title: display.to_s,
+      multiline: multiline || value.is_a?(Hash) || value.is_a?(Array)
     }
+  end
+
+  def pretty_json(value)
+    JSON.pretty_generate(value)
+  rescue StandardError
+    value.to_s
   end
 end
